@@ -12,7 +12,7 @@ import qualified Data.List as L
 import System.Console.ANSI
 import Control.Exception
 
-data Command = Init | Set | Show | List deriving Show
+data Command = Init | Set | Show | List | Display deriving Show
 
 eitherCredsFile :: IO (Either AWSProfileSetUpError String)
 eitherCredsFile = do
@@ -111,16 +111,33 @@ setProfile args awsCredsFile =  do
                             setSGR [SetColor Foreground Vivid Green]
                             putStrLn $ "Your AWS profile is set to " ++ unpack profile
 
+displayProfileCreds :: String -> IO ()
+displayProfileCreds awsCredsFile = do
+    errorOrIni <- readIniFile awsCredsFile
+    case errorOrIni of
+        Left err  -> putStrLn err
+        Right ini -> do
+            let accessKey = lookupValue "default" awsAccessKeyId ini
+            let secret    = lookupValue "default" awsSecretAccessKey ini
+            case (accessKey, secret) of
+                        (Left err, _) -> print err
+                        (_, Left err) -> print err
+                        (Right a, Right s) -> do
+                            setSGR [SetColor Foreground Vivid Green]
+                            print $ awsAccessKeyId <> ": " <>  a
+                            print $ awsAccessKeyId <> ": " <>  s
+
 
 parseCommand :: String -> Either String Command          
 parseCommand str = case str of
-    "set"  -> Right Set
-    "show" -> Right Show
-    "list" -> Right List
-    _      -> Left str
+    "set"     -> Right Set
+    "show"    -> Right Show
+    "list"    -> Right List
+    "display" -> Right Display
+    _         -> Left str
 
 commands :: [String]
-commands = ["set", "show", "list"]
+commands = ["set", "show", "list", "display"]
 
 main :: IO ()
 main = do
@@ -135,9 +152,10 @@ main = do
             case (cmd, awsCredsFile) of
                 (_, Left err) -> putStrLn err
                 (Left str, _)    -> putStrLn $ str ++ " is not a valid command. Supported comands are: " ++ show commands
-                (Right Set, Right file)   -> setProfile xs file 
-                (Right List, Right file)  -> listProfiles file
-                (Right Show, Right file)  -> showProfileName file
+                (Right Set, Right file)     -> setProfile xs file 
+                (Right List, Right file)    -> listProfiles file
+                (Right Show, Right file)    -> showProfileName file
+                (Right Display, Right file) -> displayProfileCreds file
 
 
    
