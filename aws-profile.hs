@@ -1,24 +1,24 @@
-#! /usr/bin/env stack 
+#! /usr/bin/env stack
 --stack --resolver lts-12.21 script --package ini --package directory --package text --package unordered-containers --package directory --package ansi-terminal --package either
 
 {-# LANGUAGE OverloadedStrings #-}
 
-import System.Environment (getArgs, lookupEnv)
-import Data.Ini
-import Data.Text
+import           Control.Exception
 import qualified Data.HashMap.Strict as H
-import System.Directory
-import qualified Data.List as L
-import System.Console.ANSI
-import Control.Exception
+import           Data.Ini
+import qualified Data.List           as L
+import           Data.Text
+import           System.Console.ANSI
+import           System.Directory
+import           System.Environment  (getArgs, lookupEnv)
 
 data Command = Init | Set | Show | List | Display | Add deriving Show
 
 eitherCredsFile :: IO (Either AWSProfileSetUpError String)
 eitherCredsFile = do
-      awsCredsFile <- lookupEnv "AWS_CREDENTIALS" 
+      awsCredsFile <- lookupEnv "AWS_CREDENTIALS"
       case awsCredsFile of
-        Nothing  -> return $ Left envVarAndFileRequirements
+        Nothing       -> return $ Left envVarAndFileRequirements
         Just filepath -> return $ Right filepath
 
 awsAccessKeyId :: Text
@@ -68,7 +68,7 @@ getCurrentProfile fp = do
     case fileData of
         [] -> return $ Left "You've not yet selected a profile using aws-profile."
         f ->  return $ parseComment $ L.last $ L.lines f
-        
+
 
 showProfileName :: String -> IO ()
 showProfileName fp = do
@@ -82,7 +82,7 @@ showProfileName fp = do
 listProfiles :: String -> IO ()
 listProfiles fp = do
     errorOrIni <- readIniFile fp
-    case errorOrIni of 
+    case errorOrIni of
         Left err -> putStrLn err
         Right ini -> do
             setSGR [SetColor Foreground Vivid Green]
@@ -111,8 +111,8 @@ setProfile args awsCredsFile =  do
                             let settings = WriteIniSettings EqualsKeySeparator
                             writeFile awsCredsFile $ unpack $ printIniWith settings newIni
                             appendFile awsCredsFile $ currentProfileComment profile
-                            
-                            
+
+
                             -- sets output text to green
                             setSGR [SetColor Foreground Vivid Green]
                             putStrLn $ "Your AWS profile is set to " ++ unpack profile
@@ -136,8 +136,8 @@ displayProfileCreds awsCredsFile = do
 
 addProfile :: FilePath -> IO ()
 addProfile awsCredsFile = do
-    n <- putStr "What is the name of the new profile? " >> getLine 
-    a <- putStr "What is the AWS Access Key Id? " >> getLine 
+    n <- putStr "What is the name of the new profile? " >> getLine
+    a <- putStr "What is the AWS Access Key Id? " >> getLine
     s <- putStr "Was is the AWS Secret Access Key? " >> getLine
     currentProfile <- getCurrentProfile awsCredsFile
     errorOrIni    <- readIniFile awsCredsFile
@@ -149,13 +149,13 @@ addProfile awsCredsFile = do
             let settings = WriteIniSettings EqualsKeySeparator
             writeFile awsCredsFile $ unpack $ printIniWith settings newIni
             appendFile awsCredsFile $ currentProfileComment $ pack profile
-        (Right ini, Left _) -> do            
+        (Right ini, Left _) -> do
             setSGR [SetColor Foreground Vivid Green]
             let newIni = Ini {unIni = H.insert (pack n) (H.fromList [(awsAccessKeyId, pack a), (awsSecretAccessKey, pack s)]) (unIni ini)}
             let settings = WriteIniSettings EqualsKeySeparator
             writeFile awsCredsFile $ unpack $ printIniWith settings newIni
 
-parseCommand :: String -> Either String Command          
+parseCommand :: String -> Either String Command
 parseCommand str = case str of
     "set"     -> Right Set
     "show"    -> Right Show
@@ -172,7 +172,7 @@ main = do
     -- sets output text to red for errors
     setSGR [SetColor Foreground Vivid Red]
     args <- getArgs
-    case args of 
+    case args of
         []   -> putStrLn $ "You must specify a command. Supported commands are: " ++ show commands
         x:xs -> do
             let cmd = parseCommand x
@@ -180,11 +180,11 @@ main = do
             case (cmd, awsCredsFile) of
                 (_, Left err) -> putStrLn err
                 (Left str, _)    -> putStrLn $ str ++ " is not a valid command. Supported comands are: " ++ show commands
-                (Right Set, Right file)     -> setProfile xs file 
+                (Right Set, Right file)     -> setProfile xs file
                 (Right List, Right file)    -> listProfiles file
                 (Right Show, Right file)    -> showProfileName file
                 (Right Display, Right file) -> displayProfileCreds file
                 (Right Add, Right file)     -> addProfile file
 
 
-   
+
