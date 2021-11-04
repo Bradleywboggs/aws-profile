@@ -12,7 +12,7 @@ import qualified Data.List as L
 import System.Console.ANSI
 import Control.Exception
 
-data Command = Init | Set | Show | List | Display deriving Show
+data Command = Init | Set | Show | List | Display | Add deriving Show
 
 eitherCredsFile :: IO (Either AWSProfileSetUpError String)
 eitherCredsFile = do
@@ -62,16 +62,22 @@ parseComment comment = case L.words comment of
 allIniKeys :: Ini -> [String]
 allIniKeys ini = fmap unpack (sections ini)
 
-showProfileName :: String -> IO ()
-showProfileName fp = do
+getCurrentProfile :: FilePath -> IO (Either String Profile)
+getCurrentProfile fp = do
     fileData <- catch (readFile fp) catchExc
     case fileData of
-        [] -> putStrLn "You've not yet selected a profile using aws-profile."
-        f -> case parseComment $ L.last $ L.lines f of
-                Left err     -> putStrLn err
-                Right profile -> do
-                    setSGR [SetColor Foreground Vivid Green]
-                    putStrLn $ "You're current default profile is " ++ profile ++ "."
+        [] -> return $ Left "You've not yet selected a profile using aws-profile."
+        f ->  return $ parseComment $ L.last $ L.lines f
+        
+
+showProfileName :: String -> IO ()
+showProfileName fp = do
+    cp <- getCurrentProfile fp
+    case cp of
+        Left err     -> putStrLn err
+        Right profile -> do
+            setSGR [SetColor Foreground Vivid Green]
+            putStrLn $ "You're current default profile is " ++ profile ++ "."
 
 listProfiles :: String -> IO ()
 listProfiles fp = do
@@ -128,16 +134,38 @@ displayProfileCreds awsCredsFile = do
                             print $ awsAccessKeyId <> ": " <>  s
 
 
+addProfile :: FilePath -> IO ()
+addProfile awsCredsFile = do
+    n <- putStr "What is the name of the new profile? " >> getLine 
+    a <- putStr "What is the AWS Access Key Id? " >> getLine 
+    s <- putStr "Was is the AWS Secret Access Key? " >> getLine
+    currentProfile <- getCurrentProfile awsCredsFile
+    errorOrIni    <- readIniFile awsCredsFile
+    case (errorOrIni, currentProfile) of
+        (Left err, _)  -> putStrLn err
+        (Right ini, Right profile) -> do
+            setSGR [SetColor Foreground Vivid Green]
+            let newIni = Ini {unIni = H.insert (pack n) (H.fromList [(awsAccessKeyId, pack a), (awsSecretAccessKey, pack s)]) (unIni ini)}
+            let settings = WriteIniSettings EqualsKeySeparator
+            writeFile awsCredsFile $ unpack $ printIniWith settings newIni
+            appendFile awsCredsFile $ currentProfileComment $ pack profile
+        (Right ini, Left _) -> do            
+            setSGR [SetColor Foreground Vivid Green]
+            let newIni = Ini {unIni = H.insert (pack n) (H.fromList [(awsAccessKeyId, pack a), (awsSecretAccessKey, pack s)]) (unIni ini)}
+            let settings = WriteIniSettings EqualsKeySeparator
+            writeFile awsCredsFile $ unpack $ printIniWith settings newIni
+
 parseCommand :: String -> Either String Command          
 parseCommand str = case str of
     "set"     -> Right Set
     "show"    -> Right Show
     "list"    -> Right List
     "display" -> Right Display
+    "add"     -> Right Add
     _         -> Left str
 
 commands :: [String]
-commands = ["set", "show", "list", "display"]
+commands = ["set", "show", "list", "display", "add"]
 
 main :: IO ()
 main = do
@@ -156,6 +184,7 @@ main = do
                 (Right List, Right file)    -> listProfiles file
                 (Right Show, Right file)    -> showProfileName file
                 (Right Display, Right file) -> displayProfileCreds file
+                (Right Add, Right file)     -> addProfile file
 
 
    
