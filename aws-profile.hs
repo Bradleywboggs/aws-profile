@@ -1,5 +1,5 @@
 #! /usr/bin/env stack
---stack --resolver lts-12.21 script --package ini --package directory --package text --package unordered-containers --package directory --package ansi-terminal --package either
+--stack --resolver lts-16.26 script --package ini --package directory --package text --package unordered-containers --package directory --package ansi-terminal --package either
 
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -13,6 +13,17 @@ import           System.Directory
 import           System.Environment  (getArgs, lookupEnv)
 
 data Command = Init | Set | Show | List | Display | Add deriving Show
+
+deleteProfile :: Profile -> Ini -> Ini
+deleteProfile p = undefined
+
+type AccessKeyIdValue = Text
+type SecretKeyValue = Text
+type ProfileData = (Profile, AccessKeyIdValue, SecretKeyValue)
+updateProfiles :: ProfileData -> Ini -> Ini
+updateProfiles (p, a, s) ini = 
+    Ini {iniSections = H.insert (pack p) [(awsAccessKeyId, a), (awsSecretAccessKey, s)] originalSections, iniGlobals = []}
+        where originalSections = iniSections ini
 
 eitherCredsFile :: IO (Either AWSProfileSetUpError String)
 eitherCredsFile = do
@@ -41,7 +52,7 @@ type InvalidProfileError = String
 invalidProfileErr :: [String] -> InvalidProfileError
 invalidProfileErr validProfiles = "You must include a valid profile name. Your available AWS profiles are: " ++ show validProfiles
 
-validProfiles ini = L.filter (/= "default") (allIniKeys ini)
+validProfiles ini = L.filter (/= defaultProfile) (allIniKeys ini)
 
 getEitherProfileArg :: [String] -> Ini -> IO (Either InvalidProfileError Text)
 getEitherProfileArg args ini = do
@@ -53,6 +64,9 @@ catchExc :: IOException -> IO String
 catchExc _ = return []
 
 type Profile = String
+defaultProfile :: Profile
+defaultProfile = "default"
+
 parseComment :: String -> Either String Profile
 parseComment comment = case L.words comment of
     [";aws-profile:", profile] -> Right profile
@@ -107,7 +121,7 @@ setProfile args awsCredsFile =  do
                         (Left err, _) -> print err
                         (_, Left err) -> print err
                         (Right a, Right s) -> do
-                            let newIni = Ini {unIni = H.insert "default" (H.fromList [(awsAccessKeyId, a), (awsSecretAccessKey, s)]) (unIni ini)}
+                            let newIni = updateProfiles (defaultProfile, a, s) ini
                             let settings = WriteIniSettings EqualsKeySeparator
                             writeFile awsCredsFile $ unpack $ printIniWith settings newIni
                             appendFile awsCredsFile $ currentProfileComment profile
@@ -123,8 +137,8 @@ displayProfileCreds awsCredsFile = do
     case errorOrIni of
         Left err  -> putStrLn err
         Right ini -> do
-            let accessKey = lookupValue "default" awsAccessKeyId ini
-            let secret    = lookupValue "default" awsSecretAccessKey ini
+            let accessKey = lookupValue (pack defaultProfile) awsAccessKeyId ini
+            let secret    = lookupValue (pack defaultProfile) awsSecretAccessKey ini
             case (accessKey, secret) of
                         (Left err, _) -> print err
                         (_, Left err) -> print err
@@ -145,13 +159,13 @@ addProfile awsCredsFile = do
         (Left err, _)  -> putStrLn err
         (Right ini, Right profile) -> do
             setSGR [SetColor Foreground Vivid Green]
-            let newIni = Ini {unIni = H.insert (pack n) (H.fromList [(awsAccessKeyId, pack a), (awsSecretAccessKey, pack s)]) (unIni ini)}
+            let newIni = updateProfiles (n, pack a, pack s) ini
             let settings = WriteIniSettings EqualsKeySeparator
             writeFile awsCredsFile $ unpack $ printIniWith settings newIni
             appendFile awsCredsFile $ currentProfileComment $ pack profile
         (Right ini, Left _) -> do
             setSGR [SetColor Foreground Vivid Green]
-            let newIni = Ini {unIni = H.insert (pack n) (H.fromList [(awsAccessKeyId, pack a), (awsSecretAccessKey, pack s)]) (unIni ini)}
+            let newIni = updateProfiles (n, pack a, pack s) ini
             let settings = WriteIniSettings EqualsKeySeparator
             writeFile awsCredsFile $ unpack $ printIniWith settings newIni
 
