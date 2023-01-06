@@ -1,6 +1,6 @@
-#! /usr/bin/env stack
---stack --resolver lts-16.26 script --package ini --package directory --package text --package unordered-containers --package directory --package ansi-terminal --package either
-
+module Main where 
+-- TODO: find another way to persist a record of the current profile or just do 
+-- a full scan of the profiles
 {-# LANGUAGE OverloadedStrings #-}
 
 import           Control.Exception
@@ -33,10 +33,10 @@ eitherCredsFile = do
         Just filepath -> return $ Right filepath
 
 awsAccessKeyId :: Text
-awsAccessKeyId = "aws_access_key_id"
+awsAccessKeyId = pack "aws_access_key_id"
 
 awsSecretAccessKey :: Text
-awsSecretAccessKey = "aws_secret_access_key"
+awsSecretAccessKey = pack "aws_secret_access_key"
 
 type AWSProfileSetUpError = String
 envVarAndFileRequirements :: AWSProfileSetUpError
@@ -144,8 +144,8 @@ displayProfileCreds awsCredsFile = do
                         (_, Left err) -> print err
                         (Right a, Right s) -> do
                             setSGR [SetColor Foreground Vivid Green]
-                            print $ awsAccessKeyId <> ": " <>  a
-                            print $ awsAccessKeyId <> ": " <>  s
+                            print $ awsAccessKeyId <> pack ": " <>  a
+                            print $ awsAccessKeyId <> pack ": " <>  s
 
 
 addProfile :: FilePath -> IO ()
